@@ -8,19 +8,21 @@ router.get('/', (req, res) => {
                    FROM posts
                    JOIN users ON posts.author = users.id`;
     db.query(query, (err, results) => {
-        if (err) return res.status(500).send(err);
-        res.json(results);
+        if (err) return res.status(500).json({ success: false, error: err });
+        res.json({ success: true, posts: results });
     });
 });
 
 // POST create post
 router.post('/', (req, res) => {
-    const { title, content } = req.body;
+    const { title, content, author } = req.body;
+    if (!title || !content || !author)
+        return res.status(400).json({ success: false, message: 'Title, content, and author are required' });
      const query = 'INSERT INTO posts (title, content, author) VALUES (?, ?, ?)';
     
     db.query(query, [title, content, author], (err, result) => {
-        if (err) return res.status(500).send(err);
-        res.send(`Post "${title}" created successfully`);
+        if (err) return res.status(500).json({ success: false, error: err });
+        res.json({ success: true, message: `Post "${title}" created successfully`, postId: result.insertId });
     });
 });
 

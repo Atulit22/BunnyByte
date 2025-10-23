@@ -1,38 +1,58 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../server');
+const bcrypt = require('bcrypt');
 
 // GET all users
 router.get('/', (req, res) => {
-    const query = 'SELECT id, username FROM users';
-    db.query(query, (err, results) => {
-          if (err) return res.status(500).send(err);
-          res.json(results);
+    db.query('SELECT id, username FROM users',(err, results) => {
+        if (err) return res.status(500).json({success: false, error: err });
+        res.json({ success: true, users: results });
     });
 });
 
-// POST signup
-router.post('/signup', (req, res) => {
-    const { username, password } = req.body;
-    const query = 'INSERT INTO users(username, password) VALUES (?, ?)';
-    db.query(query, [username, password], (err, result) => {
-        if (err) return res.status(500).send(err);
-        res.send(`User ${username} signed up successfully`);
+// SIGNUP
+router.post('/signup', async (req, res) => {
+    try{
+        const { username, password } = req.body;
+        if (!username || !password)
+            return res.status(400).json({ success: false, message: 'Username and password required' });
+
+        // Check if username exists
+         db.query('SELECT * FROM users WHERE username = ?', [username], async (err, results) => {
+            if (err) return res.status(500).json({ success: false, error: err });
+            if (results.length > 0) return res.status(400).json({ success: false, message: 'Username already taken' });
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Insert user
+        db.query('INSERT INTO users(username, password) VALUES (?, ?)', [username, hashedPassword], (err, result) => {
+            if (err) return res.status(500).json({ success: false, error: err });
+            res.json({ success: true, message: `User ${username} signed up successfully`, userId: result.insertId });
+        });
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error });
+  }
 });
 
-// POST login
+// LOGIN
 router.post('/login', (req, res) => {
     const { username, password } = req.body;
-    const query = 'SELECT * FROM users WHERE username = ? AND password = ?';
-    
-    db.query(query, [username, password], (err, results) => {
-        if (err) return res.status(500).send(err);
-        if (results.length > 0) {
-            res.send(`User ${username} logged in successfully`);
-        } else {
-            res.status(401).send('Invalid username or password');
-        }
+    if (!username || !password)
+        return res.status(400).json({ success: false, message: 'Username and password required' });
+
+    db.query('SELECT * FROM users WHERE username = ?', [username], async (err, results) => {
+        if (err) return res.status(500).json({ success: false, error: err });
+        if (results.length === 0) return res.status(401).json({ success: false, message: 'Invalid username or password' });
+
+        const user = results[0];
+        const match = await bcrypt.compare(password, user.password);
+
+        if (!match) return res.status(401).json({ success: false, message: 'Invalid username or password' });
+
+        res.json({ success: true, message: `User ${username} logged in successfully`, userId: user.id });
     });
 });
 

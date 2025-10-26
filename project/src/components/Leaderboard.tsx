@@ -11,35 +11,31 @@ export default function Leaderboard() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   useEffect(() => {
-    // Generate mock leaderboard data
-    // In a real app, this would come from your backend
-    const generateLeaderboard = () => {
-      const mockUsers = [
-        { userId: 'user1', username: 'DEMNatulit', fullName: 'thatsME', totalPoints: 1250, problemsSolved: 35, averageTime: 8.5, streak: 12 },
-        { userId: 'user2', username: 'lookitsMEatulit', fullName: 'heeheatulit', totalPoints: 1180, problemsSolved: 32, averageTime: 9.2, streak: 8 },
-        { userId: 'user3', username: 'botyushi', fullName: 'lmaothird', totalPoints: 1050, problemsSolved: 28, averageTime: 10.1, streak: 15 },
-        { userId: 'user4', username: 'AYUSHInerd', fullName: 'NERD', totalPoints: 980, problemsSolved: 26, averageTime: 7.8, streak: 5 },
-        { userId: 'user5', username: 'areyouslow', fullName: 'ayushi', totalPoints: 920, problemsSolved: 24, averageTime: 11.3, streak: 9 },
-        { userId: user?.id || 'currentUser', username: user?.username || 'you', fullName: user?.fullName || 'You', totalPoints: 850, problemsSolved: 22, averageTime: 12.5, streak: 3 },
-        { userId: 'user7', username: 'wowatulitagain', fullName: 'idek', totalPoints: 780, problemsSolved: 20, averageTime: 9.7, streak: 7 },
-        { userId: 'user8', username: 'AreYouSlowSHi?', fullName: 'ez', totalPoints: 720, problemsSolved: 18, averageTime: 13.2, streak: 4 },
-        { userId: 'user9', username: 'iranoutofnames', fullName: 'shrugs', totalPoints: 650, problemsSolved: 16, averageTime: 14.8, streak: 2 },
-        { userId: 'user10', username: 'BunnyBYte', fullName: 'me', totalPoints: 580, problemsSolved: 14, averageTime: 15.5, streak: 6 }
-      ];
-
-      // Sort by total points and add ranks
-      const sorted = mockUsers
-        .sort((a, b) => b.totalPoints - a.totalPoints)
-        .map((user, index) => ({
-          ...user,
-          rank: index + 1,
-          previousRank: index + 1 + Math.floor(Math.random() * 3) - 1 // Mock previous rank
+    // Fetch real leaderboard data from backend
+    const fetchLeaderboard = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/users/leaderboard');
+        if (!response.ok) {
+          throw new Error('Failed to fetch leaderboard');
+        }
+        const data = await response.json();
+        
+        // Add fullName and previousRank (mock previousRank for now)
+        const enrichedData = data.map((entry: any) => ({
+          ...entry,
+          fullName: entry.username, // Use username as fullName for now
+          previousRank: entry.rank + Math.floor(Math.random() * 3) - 1 // Mock previous rank
         }));
-
-      setLeaderboard(sorted);
+        
+        setLeaderboard(enrichedData);
+      } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        // Set empty leaderboard on error
+        setLeaderboard([]);
+      }
     };
 
-    generateLeaderboard();
+    fetchLeaderboard();
   }, [timeframe, user]);
 
   const getRankIcon = (rank: number) => {

@@ -66,13 +66,26 @@ export default function ProblemView({ problemId, onBack, level }: ProblemViewPro
         
         // Test runner
         const testResults = [];
-        ${problem.testCases.map((testCase, index) => `
+        ${problem.testCases.map((testCase, index) => {
+          // Determine if expected output is a number
+          const isNumber = !isNaN(Number(testCase.expectedOutput)) && testCase.expectedOutput.trim() !== '';
+          const isArrayOrObject = testCase.expectedOutput.includes('[') || testCase.expectedOutput.includes('{');
+          
+          let expectedValue;
+          if (isArrayOrObject) {
+            expectedValue = testCase.expectedOutput;
+          } else if (isNumber) {
+            expectedValue = testCase.expectedOutput;
+          } else {
+            expectedValue = `"${testCase.expectedOutput}"`;
+          }
+          
+          return `
           try {
             const result = ${testCase.input};
-            const expected = ${testCase.expectedOutput.includes('[') || testCase.expectedOutput.includes('{') 
-              ? testCase.expectedOutput 
-              : `"${testCase.expectedOutput}"`};
-            const passed = JSON.stringify(result) === JSON.stringify(expected);
+            const expected = ${expectedValue};
+            // Use loose comparison for numbers vs strings
+            const passed = JSON.stringify(result) === JSON.stringify(expected) || String(result) === String(expected);
             testResults.push({ 
               passed, 
               input: "${testCase.input}",
@@ -88,7 +101,8 @@ export default function ProblemView({ problemId, onBack, level }: ProblemViewPro
               description: "${testCase.description}"
             });
           }
-        `).join('')}
+        `;
+        }).join('')}
         
         return testResults;
       `;

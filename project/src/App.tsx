@@ -29,6 +29,11 @@ function AppContent() {
   const [selectedProblem, setSelectedProblem] = useState<string | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<'easy' | 'intermediate' | 'advanced'>('easy');
 
+  const handleViewChange = (view: 'dashboard' | 'learn' | 'profile' | 'leaderboard') => {
+    setCurrentView(view);
+    setSelectedProblem(null); // Clear selected problem when navigating
+  };
+
   if (!isAuthenticated || !user) {
     return <AuthPage />;
   }
@@ -36,7 +41,7 @@ function AppContent() {
   if (selectedProblem) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-        <Navbar currentView={currentView} setCurrentView={setCurrentView} />
+        <Navbar currentView={currentView} setCurrentView={handleViewChange} />
         <ProblemView 
           problemId={selectedProblem}
           onBack={() => setSelectedProblem(null)}
@@ -48,7 +53,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <Navbar currentView={currentView} setCurrentView={setCurrentView} />
+      <Navbar currentView={currentView} setCurrentView={handleViewChange} />
       
       <main className="pt-20">
         {currentView === 'dashboard' && <Dashboard setCurrentView={setCurrentView} />}

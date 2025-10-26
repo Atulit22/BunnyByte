@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types';
+import { api } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<boolean>;
   signup: (userData: SignupData) => Promise<boolean>;
   logout: () => void;
   loading: boolean;
@@ -40,72 +41,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Check against stored users (demo implementation)
-    const users = JSON.parse(localStorage.getItem('bunnybyte_users') || '[]');
-    const foundUser = users.find((u: any) => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const userSession = {
-        id: foundUser.id,
-        username: foundUser.username,
-        email: foundUser.email,
-        fullName: foundUser.fullName,
-        joinDate: foundUser.joinDate
-      };
-      setUser(userSession);
-      localStorage.setItem('bunnybyte_user', JSON.stringify(userSession));
+    try {
+      const response = await api.login(username, password);
+      
+      if (response.success) {
+        // Fetch user profile
+        const profile = await api.getProfile(response.userId);
+        
+        const userSession = {
+          id: response.userId,
+          username: profile.username,
+          email: profile.email,
+          fullName: profile.username, // Backend doesn't have fullName, using username
+          joinDate: profile.created_at
+        };
+        
+        setUser(userSession);
+        localStorage.setItem('bunnybyte_user', JSON.stringify(userSession));
+        setLoading(false);
+        return true;
+      }
+      
       setLoading(false);
-      return true;
+      return false;
+    } catch (error) {
+      console.error('Login error:', error);
+      setLoading(false);
+      return false;
     }
-    
-    setLoading(false);
-    return false;
   };
 
   const signup = async (userData: SignupData): Promise<boolean> => {
     setLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Check if user already exists
-    const users = JSON.parse(localStorage.getItem('bunnybyte_users') || '[]');
-    const existingUser = users.find((u: any) => u.email === userData.email || u.username === userData.username);
-    
-    if (existingUser) {
+    try {
+      const response = await api.signup(userData.username, userData.email, userData.password);
+      
+      if (response.success) {
+        // Auto login after signup
+        const profile = await api.getProfile(response.userId);
+        
+        const userSession = {
+          id: response.userId,
+          username: profile.username,
+          email: profile.email,
+          fullName: userData.fullName || profile.username,
+          joinDate: profile.created_at
+        };
+        
+        setUser(userSession);
+        localStorage.setItem('bunnybyte_user', JSON.stringify(userSession));
+        setLoading(false);
+        return true;
+      }
+      
+      setLoading(false);
+      return false;
+    } catch (error) {
+      console.error('Signup error:', error);
       setLoading(false);
       return false;
     }
-    
-    // Create new user
-    const newUser = {
-      ...userData,
-      id: `user_${Date.now()}`,
-      joinDate: new Date().toISOString()
-    };
-    
-    users.push(newUser);
-    localStorage.setItem('bunnybyte_users', JSON.stringify(users));
-    
-    // Auto login
-    const userSession = {
-      id: newUser.id,
-      username: newUser.username,
-      email: newUser.email,
-      fullName: newUser.fullName,
-      joinDate: newUser.joinDate
-    };
-    setUser(userSession);
-    localStorage.setItem('bunnybyte_user', JSON.stringify(userSession));
-    
-    setLoading(false);
-    return true;
   };
 
   const logout = () => {

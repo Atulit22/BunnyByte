@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProgress, Achievement } from '../types';
 import { useAuth } from './AuthContext';
+import { api } from '../services/api';
 
 interface UserProgressContextType {
   progress: UserProgress | null;
@@ -59,7 +60,7 @@ export const UserProgressProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setLoading(false);
   }, [user]);
 
-  const updateProgress = (problemId: string, level: 'easy' | 'intermediate' | 'advanced', points: number) => {
+  const updateProgress = async (problemId: string, level: 'easy' | 'intermediate' | 'advanced', points: number) => {
     if (!progress || !user) return;
 
     const newProgress = { ...progress };
@@ -103,6 +104,24 @@ export const UserProgressProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       setProgress(newProgress);
       localStorage.setItem(`bunnybyte_progress_${user.id}`, JSON.stringify(newProgress));
+
+      // Sync with backend - convert problemId to challengeId
+      // Problem IDs are like 'easy-1', 'intermediate-5', etc.
+      // We'll extract the number and map it to a challenge ID
+      try {
+        const problemNumber = parseInt(problemId.split('-')[1]);
+        // For now, use the problem number as the challenge ID
+        // In production, you'd have a proper mapping
+        await api.updateProgress(
+          user.id,
+          problemNumber,
+          'Completed',
+          points,
+          '' // You can pass the actual code if needed
+        );
+      } catch (error) {
+        console.error('Failed to sync progress with backend:', error);
+      }
     }
   };
 

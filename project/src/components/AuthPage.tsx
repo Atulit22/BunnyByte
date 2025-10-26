@@ -63,9 +63,9 @@ export default function AuthPage() {
     try {
       let success = false;
       if (isLogin) {
-        success = await login(formData.email, formData.password);
+        success = await login(formData.username || formData.email, formData.password);
         if (!success) {
-          setErrors({ general: 'Invalid email or password' });
+          setErrors({ general: 'Invalid username or password' });
         }
       } else {
         success = await signup({
@@ -279,10 +279,10 @@ export default function AuthPage() {
               {loading ? (
                 <div className="flex items-center justify-center">
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                  {isLogin ? 'Signing in...' : 'Creating account...'}
+                  {isLogin ? 'Logging in...' : 'Creating account...'}
                 </div>
               ) : (
-                isLogin ? 'Sign In' : 'Create Account'
+                isLogin ? 'Log In' : 'Create Account'
               )}
             </button>
           </form>

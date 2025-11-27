@@ -1,15 +1,18 @@
+import React, { useState, useEffect } from 'react';
+import { useTheme } from '../contexts/ThemeContext';
+import { useUserProgress } from '../contexts/UserProgressContext';
 import { getProblemById, getProblemsByLevel } from '../data/problems';
-import { ArrowLeft, Play, RotateCcw, Lightbulb, CheckCircle, XCircle, ArrowRight, ArrowLeft as PrevArrow } from 'lucide-react';
+import { ArrowLeft, Play, RotateCcw, Lightbulb, CheckCircle, XCircle, ArrowRight, ArrowLeft as PrevArrow, Send } from 'lucide-react';
 import CodeEditor from './CodeEditor';
 import CommentSection from './CommentSection';
 
 interface ProblemViewProps {
   problemId: string;
   onBack: () => void;
-  navigateToProblem: (problemId: string) => void;
+  level: 'easy' | 'intermediate' | 'advanced';
 }
 
-export default function ProblemView({ problemId, onBack, navigateToProblem }: ProblemViewProps) {
+export default function ProblemView({ problemId, onBack, level }: ProblemViewProps) {
   const [code, setCode] = useState('');
   const [output, setOutput] = useState('');
   const [testResults, setTestResults] = useState<any[]>([]);
@@ -18,14 +21,15 @@ export default function ProblemView({ problemId, onBack, navigateToProblem }: Pr
   const [currentHintIndex, setCurrentHintIndex] = useState(0);
 
   const problem = getProblemById(problemId);
-  const levelProblems = getProblemsByLevel(problem?.level || 'beginner');
+  const levelProblems = getProblemsByLevel(level);
   const currentIndex = levelProblems.findIndex(p => p.id === problemId);
   const prevProblem = currentIndex > 0 ? levelProblems[currentIndex - 1] : null;
   const nextProblem = currentIndex < levelProblems.length - 1 ? levelProblems[currentIndex + 1] : null;
+  const isLastProblem = currentIndex === levelProblems.length - 1;
 
   const { colors } = useTheme();
-  const { solvedProblems, markProblemSolved } = useProgress();
-  const isSolved = solvedProblems.includes(problemId);
+  const { progress, updateProgress } = useUserProgress();
+  const isSolved = progress?.solvedProblems.includes(problemId) || false;
 
   useEffect(() => {
     if (problem) {
@@ -35,55 +39,95 @@ export default function ProblemView({ problemId, onBack, navigateToProblem }: Pr
 
   const runCode = async () => {
     setIsRunning(true);
+    setOutput('');
+    setTestResults([]);
+
     try {
-      // Create a function from the user's code
-      const userFunction = new Function('return ' + code)();
-      
-      // Run the test cases
-      const results = problem.testCases.map((testCase: any) => {
-        try {
-          const result = userFunction(...testCase.input);
-          const passed = JSON.stringify(result) === JSON.stringify(testCase.expected);
-          
-          return {
-            ...testCase,
-            actual: result,
-            passed,
-            error: null
-          };
-        } catch (error) {
-          return {
-            ...testCase,
-            actual: null,
-            passed: false,
-            error: error.message
-          };
-        }
-      });
+      const wrappedCode = `
+        ${code}
+
+        const testResults = [];
+        ${problem?.testCases.map((testCase, index) => `
+          try {
+            const result = ${testCase.input};
+            const expected = ${testCase.expectedOutput.includes('[') || testCase.expectedOutput.includes('{')
+              ? testCase.expectedOutput
+              : `"${testCase.expectedOutput}"`};
+            const passed = JSON.stringify(result) === JSON.stringify(expected);
+            testResults.push({
+              passed,
+              input: "${testCase.input}",
+              expected: expected,
+              actual: result,
+              description: "${testCase.description}"
+            });
+          } catch (error) {
+            testResults.push({
+              passed: false,
+              error: error.message,
+              input: "${testCase.input}",
+              description: "${testCase.description}"
+            });
+          }
+        `).join('')}
+
+        return testResults;
+      `;
+
+      const testFunction = new Function(wrappedCode);
+      const results = testFunction();
 
       setTestResults(results);
-      
-      // Check if all tests passed
-      const allPassed = results.every(result => result.passed);
+
+      const allPassed = results.every((result: any) => result.passed);
+
       if (allPassed && !isSolved) {
-        markProblemSolved(problemId);
-        setOutput('🎉 Congratulations! All tests passed!');
+        updateProgress(problemId, level, problem?.points || 0);
+        setOutput('Congratulations! All tests passed!');
       } else if (allPassed) {
-        setOutput('✅ All tests passed!');
+        setOutput('All tests passed!');
       } else {
-        setOutput('❌ Some tests failed. Check the results below.');
+        setOutput('Some tests failed. Check the results below.');
       }
+
     } catch (error) {
-      setOutput(`Error: ${error.message}`);
+      setOutput(`Error: ${(error as Error).message}`);
       setTestResults([]);
     }
+
     setIsRunning(false);
   };
 
   const resetCode = () => {
-    setCode(problem.starterCode);
+    setCode(problem?.starterCode || '');
     setOutput('');
     setTestResults([]);
+  };
+
+  const handlePrevious = () => {
+    if (prevProblem) {
+      window.location.hash = `#problem-${prevProblem.id}`;
+      window.location.reload();
+    }
+  };
+
+  const handleNext = () => {
+    if (nextProblem) {
+      window.location.hash = `#problem-${nextProblem.id}`;
+      window.location.reload();
+    }
+  };
+
+  const handleSubmit = () => {
+    const allPassed = testResults.every((result: any) => result.passed);
+    if (allPassed && testResults.length > 0) {
+      alert('Solution submitted successfully! You have completed all problems in this level.');
+      onBack();
+    } else if (testResults.length === 0) {
+      alert('Please run your code first before submitting.');
+    } else {
+      alert('Please pass all test cases before submitting.');
+    }
   };
 
   if (!problem) {
@@ -107,38 +151,9 @@ export default function ProblemView({ problemId, onBack, navigateToProblem }: Pr
         </button>
 
         <div className="flex items-center space-x-4">
-          {/* Navigation buttons */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => prevProblem && navigateToProblem(prevProblem.id)}
-              disabled={!prevProblem}
-              className={`p-2 rounded-lg transition-all duration-200 ${
-                prevProblem 
-                  ? `${colors.textSecondary} hover:text-white hover:bg-white/10`
-                  : 'text-slate-600 cursor-not-allowed'
-              }`}
-              title="Previous Problem"
-            >
-              <PrevArrow className="w-5 h-5" />
-            </button>
-            
-            <span className={`text-sm ${colors.textSecondary}`}>
-              {currentIndex + 1} of {levelProblems.length}
-            </span>
-            
-            <button
-              onClick={() => nextProblem && navigateToProblem(nextProblem.id)}
-              disabled={!nextProblem}
-              className={`p-2 rounded-lg transition-all duration-200 ${
-                nextProblem 
-                  ? `${colors.textSecondary} hover:text-white hover:bg-white/10`
-                  : 'text-slate-600 cursor-not-allowed'
-              }`}
-              title="Next Problem"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          </div>
+          <span className={`text-sm ${colors.textSecondary}`}>
+            Problem {currentIndex + 1} of {levelProblems.length}
+          </span>
 
           {isSolved && (
             <div className="flex items-center space-x-2 px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full">
@@ -304,11 +319,11 @@ export default function ProblemView({ problemId, onBack, navigateToProblem }: Pr
                         Test {index + 1}: {result.passed ? 'Passed' : 'Failed'}
                       </span>
                     </div>
-                    
+
                     <p className={`text-xs ${colors.textSecondary} mb-2`}>
                       {result.description}
                     </p>
-                    
+
                     <div className="text-xs space-y-1">
                       <div>
                         <span className={colors.textSecondary}>Input: </span>
@@ -339,6 +354,62 @@ export default function ProblemView({ problemId, onBack, navigateToProblem }: Pr
               </div>
             </div>
           )}
+
+          {/* Navigation Buttons */}
+          <div className={`${colors.surface} rounded-xl p-6 border border-white/10`}>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handlePrevious}
+                disabled={!prevProblem}
+                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                  prevProblem
+                    ? 'bg-slate-700/50 hover:bg-slate-700 text-white border border-slate-600'
+                    : 'bg-slate-700/30 text-slate-500 border border-slate-700 cursor-not-allowed'
+                }`}
+              >
+                <PrevArrow className="w-5 h-5" />
+                <span>Previous</span>
+              </button>
+
+              <div className="flex items-center space-x-3">
+                {!isLastProblem ? (
+                  <button
+                    onClick={handleNext}
+                    disabled={!nextProblem}
+                    className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                      nextProblem
+                        ? 'bg-gradient-to-r from-pink-500 to-violet-500 hover:from-pink-600 hover:to-violet-600 text-white shadow-lg'
+                        : 'bg-slate-700/30 text-slate-500 border border-slate-700 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>Next</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium rounded-lg shadow-lg transition-all duration-200"
+                  >
+                    <span>Submit Solution</span>
+                    <Send className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className={`mt-4 pt-4 border-t border-white/10 text-sm ${colors.textSecondary} text-center`}>
+              {prevProblem && (
+                <span>Previous: {prevProblem.title}</span>
+              )}
+              {prevProblem && (nextProblem || isLastProblem) && <span className="mx-3">•</span>}
+              {nextProblem && !isLastProblem && (
+                <span>Next: {nextProblem.title}</span>
+              )}
+              {isLastProblem && (
+                <span>This is the last problem in this level</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
